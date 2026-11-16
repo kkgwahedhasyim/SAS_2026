@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dashboard Admin</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><b>🎓 SAS App — Admin</b><span id="who"></span><button onclick="logout()">Logout</button></header>
+<main>
+  <div class="tabs">
+    <button data-tab="stats" class="active">Statistik</button>
+    <button data-tab="lembaga">Lembaga</button>
+    <button data-tab="users">Pengguna</button>
+    <button data-tab="link">Link Sheets</button>
+  </div>
+  <div id="content"></div>
+</main>
+<script src="config.js"></script>
+<script>
+async function init() {
+  const d = await api('me');
+  if (!d.user || d.user.role !== 'admin') return location.href = '/';
+  document.getElementById('who').textContent = d.user.nama;
+  document.querySelectorAll('.tabs button').forEach(b => {
+    b.onclick = () => {
+      document.querySelectorAll('.tabs button').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      ({ stats: loadStats, lembaga: loadLembaga, users: loadUsers, link: loadLink })[b.dataset.tab]();
+    };
+  });
+  loadStats();
+}
+async function loadStats() {
+  const d = await api('stats');
+  document.getElementById('content').innerHTML = `
+    <div class="grid">
+      <div class="card stat"><h3>${d.lembaga}</h3><p>Lembaga</p></div>
+      <div class="card stat"><h3>${d.siswa}</h3><p>Siswa</p></div>
+      <div class="card stat"><h3>${d.soal}</h3><p>Soal</p></div>
+      <div class="card stat"><h3>${d.ujian}</h3><p>Ujian</p></div>
+      <div class="card stat"><h3>${d.selesai}</h3><p>Selesai</p></div>
+    </div>`;
+}
+async function loadLembaga() {
+  const rows = await api('lembaga');
+  document.getElementById('content').innerHTML = `
+    <h2>Lembaga (${rows.length})</h2>
+    <p class="hint">Edit data lembnaga langsung di Google Sheets (sheet LEMBAGA).</p>
+    <table>
+      <tr><th>Kode</th><th>Nama</th><th>Alamat</th><th>Status</th></tr>
+      ${rows.map(l => `<tr><td>${l.Kode_Lembaga}</td><td>${l.Nama_Lembaga}</td>
+        <td>${l.Alamat || ''}</td><td>${l.Status || ''}</td></tr>`).join('')}
+    </table>`;
+}
+async function loadUsers() {
+  const rows = await api('users');
+  document.getElementById('content').innerHTML = `
+    <h2>Pengguna (${rows.length})</h2>
+    <p class="hint">Edit pengguna langsung di Google Sheets (sheet USERS).</p>
+    <table>
+      <tr><th>Username</th><th>Nama</th><th>Role</th><th>NIS</th><th>Kelas</th><th>Lembaga</th></tr>
+      ${rows.map(u => `<tr><td>${u.username}</td><td>${u.nama}</td><td>${u.role}</td>
+        <td>${u.nis || '-'}</td><td>${u.kelas || '-'}</td><td>${u.kode_lembaga || '-'}</td></tr>`).join('')}
+    </table>`;
+}
+function loadLink() {
+  document.getElementById('content').innerHTML = `
+    <div class="card">
+      <h2>📊 Kelola Data di Google Sheets</h2>
+      <p>Semua data (lembaga, siswa, soal, ujian) dikelola <b>langsung di Google Sheets</b>.</p>
+      <p>Buka spreadsheet Anda → edit sheet → perubahan langsung terlihat di aplikasi.</p>
+      <h3>Sheet yang tersedia:</h3>
+      <ul style="margin-left:20px;line-height:2">
+        <li><b>LEMBAGA</b> — daftar lembaga</li>
+        <li><b>USERS</b> — admin, guru, siswa</li>
+        <li><b>SOAL</b> — bank soal 8 mapel × 3 kelas</li>
+        <li><b>UJIAN</b> — paket & jadwal ujian</li>
+        <li><b>SESI</b> — sesi ujian siswa (otomatis)</li>
+        <li><b>JAWABAN</b> — jawaban siswa (otomatis)</li>
+        <li><b>CONFIG</b> — pengaturan aplikasi</li>
+        <li><b>LOG</b> — log aktivitas</li>
+      </ul>
+      <h3>Format Tipe Soal:</h3>
+      <ul style="margin-left:20px;line-height:2">
+        <li><b>PG</b> — jawaban 1 huruf: <code>B</code></li>
+        <li><b>PGK</b> — jawaban ≥2 huruf: <code>B,C</code></li>
+        <li><b>BS</b> — 3 pernyataan, jawaban: <code>B,S,S</code></li>
+        <li><b>JD</b> — jawaban: <code>1-A,2-B,3-C</code></li>
+      </ul>
+      <h3>Gambar Soal:</h3>
+      <p>Upload gambar ke folder <code>img/</code> di GitHub repo, lalu isi kolom <b>Gambar</b> dengan nama file (mis. <code>mtk-001.png</code>).</p>
+    </div>`;
+}
+async function logout() {
+  await api('logout');
+  localStorage.removeItem('sas_token');
+  localStorage.removeItem('sas_user');
+  location.href = '/';
+}
+init();
+</script>
+</body>
+</html>
