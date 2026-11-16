@@ -4,7 +4,7 @@
 
 // 1. MASUKKAN URL WEB APP GOOGLE APPS SCRIPT ANDA DI SINI
 // Pastikan diakhiri dengan /exec
-window.API_URL = 'https://script.google.com/macros/s/AKfycb.../exec'; 
+window.API_URL = 'https://script.google.com/macros/s/AKfycbwdBdAFGeHILwROugPIhK1tt_XXXynZnNAL8petb9QhB6ABhUycFT-1YfbJ9QFjPo-_fw/exec'; 
 
 // 2. DETEKSI OTOMATIS URL GITHUB PAGES
 // Jika di-host di github.io/nama-repo/, BASE_URL akan menjadi /nama-repo/
