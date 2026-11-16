@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dashboard Siswa</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <b>🎓 SAS App</b>
+  <span id="who"></span>
+  <button onclick="logout()">Logout</button>
+</header>
+<main id="view"></main>
+<script src="config.js"></script>
+<script>
+let USER = null, SESI = null, SOAL = [], JAWABAN = {}, TIMER = null, SISA = 0;
+
+async function init() {
+  const d = await api('me');
+  if (!d.user || d.user.role !== 'siswa') return location.href = '/';
+  USER = d.user;
+  document.getElementById('who').textContent = `${USER.nama} — ${USER.kelas} (${USER.kode_lembaga || '-'})`;
+  loadUjian();
+}
+
+async function loadUjian() {
+  const list = await api('ujian-saya');
+  if (list.error) return alert(list.error);
+  document.getElementById('view').innerHTML = `
+    <h2>Daftar Ujian</h2>
+    <div class="grid">
+    ${list.length ? list.map(u => `
+      <div class="card">
+        <h3>${u.Mapel}</h3>
+        <p>Kelas ${u.Kelas} · ${u.Jumlah_Soal} soal · ${u.Durasi_Menit} menit</p>
+        <p>${u.Tanggal || '-'} ${u.Jam_Mulai || ''}${u.Jam_Selesai ? '–' + u.Jam_Selesai : ''}</p>
+        <button onclick="mulai('${u.Kode_Ujian}')">Mulai Ujian</button>
+      </div>`).join('') : '<p>Belum ada ujian terjadwal.</p>'}
+    </div>`;
+}
+
+async function mulai(kode) {
+  const d = await apiPost('mulai-ujian', { kode_ujian: kode });
+  if (d.error) return alert(d.error);
+  SESI = d.sesi_id; SOAL = d.soal; JAWABAN = d.jawaban; SISA = d.sisa_detik;
+  renderUjian();
+  startTimer();
+}
+
+function startTimer() {
+  clearInterval(TIMER);
+  TIMER = setInterval(() => {
+    SISA--;
+    const t = document.getElementById('timer');
+    if (t) {
+      const m = Math.floor(SISA / 60), s = SISA % 60;
+      t.textContent = `⏰ ${m}:${s.toString().padStart(2, '0')}`;
+      if (SISA <= 60) t.classList.add('danger');
+      if (SISA <= 0) { clearInterval(TIMER); selesai(); }
+    }
+  }, 1000);
+}
+
+function renderUjian() {
+  document.getElementById('view').innerHTML = `
+    <div class="topbar"><h2>Ujian Berlangsung</h2><div id="timer" class="timer"></div></div>
+    <div id="soalList"></div>
+    <button class="primary" onclick="selesai()">Selesai & Kumpulkan</button>`;
+  const list = document.getElementById('soalList');
+  list.innerHTML = SOAL.map((s, i) => {
+    const jw = JAWABAN[s.kode_soal] || '';
+    let body = '';
+    if (s.tipe === 'PG') {
+      body = s.opsi.map(([k, v]) => `
+        <label class="opt"><input type="radio" name="q${s.kode_soal}" value="${k}"
+          ${jw === k ? 'checked' : ''} onchange="jawab('${s.kode_soal}','${k}')">
+          <b>${k}.</b> ${v}</label>`).join('');
+    } else if (s.tipe === 'PGK') {
+      const dipilih = jw ? jw.split(',').map(x => x.trim()) : [];
+      body = `<p class="hint">Pilih lebih dari satu jawaban</p>` +
+        s.opsi.map(([k, v]) => `
+        <label class="opt"><input type="checkbox" value="${k}"
+          ${dipilih.includes(k) ? 'checked' : ''}
+          onchange="togglePGK('${s.kode_soal}','${k}',this.checked)">
+          <b>${k}.</b> ${v}</label>`).join('');
+    } else if (s.tipe === 'BS') {
+      const arr = jw ? jw.split(',').map(x => x.trim()) : [];
+      body = `<p class="hint">Tentukan Benar (B) atau Salah (S)</p>` +
+        s.pernyataan.map((p, idx) => {
+          const cur = arr[idx] || '';
+          return `<div class="bs-row">
+            <span class="bs-teks">${idx + 1}. ${p}</span>
+            <label class="bs-opt"><input type="radio" name="bs${s.kode_soal}_${idx}" value="B"
+              ${cur === 'B' ? 'checked' : ''} onchange="jawabBS('${s.kode_soal}',${idx},'B')"> B</label>
+            <label class="bs-opt"><input type="radio" name="bs${s.kode_soal}_${idx}" value="S"
+              ${cur === 'S' ? 'checked' : ''} onchange="jawabBS('${s.kode_soal}',${idx},'S')"> S</label>
+          </div>`;
+        }).join('');
+    } else if (s.tipe === 'JD') {
+      const pairs = jw ? jw.split(',').reduce((m, p) => {
+        const [a, b] = p.split('-'); m[a.trim()] = (b || '').trim(); return m;
+      }, {}) : {};
+      body = s.kiri.map((kiri, idx) => {
+        const no = idx + 1, cur = pairs[no] || '';
+        return `<div class="jd-row">
+          <span class="jd-kiri">${kiri}</span>
+          <select onchange="jawabJD('${s.kode_soal}',${no},this.value)">
+            <option value="">— pilih —</option>
+            ${s.kanan.map(kanan => {
+              const kode = kanan.split('.')[0].trim();
+              return `<option value="${kode}" ${cur === kode ? 'selected' : ''}>${kanan}</option>`;
+            }).join('')}
+          </select></div>`;
+      }).join('');
+    }
+    return `<div class="card soal">
+      <p class="q"><b>${i + 1}.</b> <span class="badge">${s.tipe}</span> ${s.pertanyaan}</p>
+      ${s.gambar ? `<img class="soal-img" src="img/${s.gambar}" alt="gambar">` : ''}
+      ${body}</div>`;
+  }).join('');
+}
+
+async function jawab(kode, jawaban) {
+  JAWABAN[kode] = jawaban;
+  await apiPost('jawab', { sesi_id: SESI, kode_soal: kode, jawaban });
+}
+function togglePGK(kode, opsi, checked) {
+  let arr = (JAWABAN[kode] || '').split(',').map(x => x.trim()).filter(Boolean);
+  if (checked) { if (!arr.includes(opsi)) arr.push(opsi); }
+  else arr = arr.filter(x => x !== opsi);
+  arr.sort();
+  const val = arr.join(',');
+  JAWABAN[kode] = val;
+  jawab(kode, val);
+}
+function jawabBS(kode, idx, val) {
+  let arr = (JAWABAN[kode] || '').split(',').map(x => x.trim());
+  while (arr.length < 3) arr.push('');
+  arr[idx] = val;
+  const s = arr.slice(0, 3).join(',');
+  JAWABAN[kode] = s;
+  jawab(kode, s);
+}
+function jawabJD(kode, no, kodeOpsi) {
+  const map = {};
+  (JAWABAN[kode] || '').split(',').forEach(p => {
+    const [a, b] = p.split('-');
+    if (a) map[a.trim()] = (b || '').trim();
+  });
+  if (kodeOpsi) map[no] = kodeOpsi; else delete map[no];
+  const val = Object.keys(map).sort((a, b) => a - b).map(k => `${k}-${map[k]}`).join(',');
+  JAWABAN[kode] = val;
+  jawab(kode, val);
+}
+
+async function selesai() {
+  if (!confirm('Yakin selesai?')) return;
+  clearInterval(TIMER);
+  const d = await apiPost('selesai-ujian', { sesi_id: SESI });
+  document.getElementById('view').innerHTML = `
+    <div class="card center">
+      <h2>🎉 Ujian Selesai</h2>
+      <p>Nilai: <b style="font-size:2.5em;color:#16a34a">${d.nilai}</b></p>
+      <p>Benar ${d.benar} dari ${d.total}</p>
+      <button onclick="location.reload()">Kembali</button>
+    </div>`;
+}
+
+async function logout() {
+  await api('logout');
+  localStorage.removeItem('sas_token');
+  localStorage.removeItem('sas_user');
+  location.href = '/';
+}
+init();
+</script>
+</body>
+</html>
