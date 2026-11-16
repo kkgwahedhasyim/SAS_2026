@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dashboard Guru</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><b>🎓 SAS App — Guru</b><span id="who"></span><button onclick="logout()">Logout</button></header>
+<main>
+  <div class="tabs">
+    <button data-tab="stats" class="active">Statistik</button>
+    <button data-tab="soal">Bank Soal</button>
+    <button data-tab="hasil">Hasil Ujian</button>
+  </div>
+  <div id="content"></div>
+</main>
+<script src="config.js"></script>
+<script>
+async function init() {
+  const d = await api('me');
+  if (!d.user || !['guru', 'admin'].includes(d.user.role)) return location.href = '/';
+  document.getElementById('who').textContent = d.user.nama;
+  document.querySelectorAll('.tabs button').forEach(b => {
+    b.onclick = () => {
+      document.querySelectorAll('.tabs button').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      ({ stats: loadStats, soal: loadSoal, hasil: loadHasil })[b.dataset.tab]();
+    };
+  });
+  loadStats();
+}
+async function loadStats() {
+  const d = await api('stats');
+  document.getElementById('content').innerHTML = `
+    <div class="grid">
+      <div class="card stat"><h3>${d.lembaga}</h3><p>Lembaga</p></div>
+      <div class="card stat"><h3>${d.siswa}</h3><p>Siswa</p></div>
+      <div class="card stat"><h3>${d.soal}</h3><p>Soal</p></div>
+      <div class="card stat"><h3>${d.ujian}</h3><p>Ujian</p></div>
+      <div class="card stat"><h3>${d.selesai}</h3><p>Selesai</p></div>
+    </div>`;
+}
+async function loadSoal() {
+  const rows = await api('soal');
+  document.getElementById('content').innerHTML = `
+    <h2>Bank Soal (${rows.length})</h2>
+    <table>
+      <tr><th>Kode</th><th>Kelas</th><th>Mapel</th><th>Tipe</th><th>Pertanyaan</th></tr>
+      ${rows.slice(0, 300).map(s => `<tr>
+        <td>${s.Kode_Soal}</td><td>${s.Kelas}</td><td>${s.Mapel}</td>
+        <td><span class="badge">${s.Tipe}</span></td>
+        <td>${String(s.Pertanyaan || '').slice(0, 80)}</td>
+      </tr>`).join('')}
+    </table>`;
+}
+async function loadHasil() {
+  const rows = await api('hasil');
+  document.getElementById('content').innerHTML = `
+    <h2>Hasil Ujian (${rows.length})</h2>
+    <table>
+      <tr><th>Nama</th><th>NIS</th><th>Kelas</th><th>Lembaga</th><th>Mapel</th><th>Nilai</th><th>Status</th></tr>
+      ${rows.map(r => `<tr>
+        <td>${r.nama}</td><td>${r.nis}</td><td>${r.kelas}</td>
+        <td>${r.kode_lembaga}</td><td>${r.mapel}</td>
+        <td><b>${r.nilai ?? '-'}</b></td><td>${r.status}</td>
+      </tr>`).join('')}
+    </table>`;
+}
+async function logout() {
+  await api('logout');
+  localStorage.removeItem('sas_token');
+  localStorage.removeItem('sas_user');
+  location.href = '/';
+}
+init();
+</script>
+</body>
+</html>
