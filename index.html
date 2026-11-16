@@ -19,16 +19,35 @@
 <script>
 document.getElementById('loginForm').onsubmit = async e => {
   e.preventDefault();
-  document.getElementById('msg').textContent = 'Memproses...';
-  const d = await api('login', {
-    username: username.value.trim(),
-    password: password.value
+  const btn = e.target.querySelector('button');
+  const msg = document.getElementById('msg');
+  
+  btn.disabled = true;
+  btn.textContent = 'Memproses...';
+  msg.textContent = '';
+
+  // Memanggil fungsi apiPost dari config.js
+  const d = await apiPost('login', {
+    username: document.getElementById('username').value.trim(),
+    password: document.getElementById('password').value
   });
-  if (d.error) { document.getElementById('msg').textContent = d.error; return; }
+
+  if (d.error) { 
+    msg.textContent = d.error; 
+    btn.disabled = false;
+    btn.textContent = 'Masuk';
+    return; 
+  }
+
+  // Simpan token dan data user
   localStorage.setItem('sas_token', d.token);
   localStorage.setItem('sas_user', JSON.stringify(d.user));
-  location.href = d.user.role === 'siswa' ? 'siswa.html'
-    : d.user.role === 'guru' ? 'guru.html' : 'admin.html';
+  
+  // Redirect sesuai role, otomatis menambahkan BASE_URL
+  const target = d.user.role === 'siswa' ? 'siswa.html' 
+               : d.user.role === 'guru' ? 'guru.html' 
+               : 'admin.html';
+  window.location.href = window.BASE_URL + target;
 };
 </script>
 </body>
