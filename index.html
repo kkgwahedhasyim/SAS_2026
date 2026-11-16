@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Login — SAS App</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="center">
+  <form id="loginForm" class="card login-card">
+    <h1>🎓 SAS App</h1>
+    <p class="sub">Soal Sumatif Akhir Semester<br>Kelas 4, 5, 6 — Multi Lembaga</p>
+    <input id="username" placeholder="Username / NIS" required>
+    <input id="password" type="password" placeholder="Password" required>
+    <button type="submit">Masuk</button>
+    <p id="msg" class="error"></p>
+  </form>
+<script src="config.js"></script>
+<script>
+document.getElementById('loginForm').onsubmit = async e => {
+  e.preventDefault();
+  document.getElementById('msg').textContent = 'Memproses...';
+  const d = await api('login', {
+    username: username.value.trim(),
+    password: password.value
+  });
+  if (d.error) { document.getElementById('msg').textContent = d.error; return; }
+  localStorage.setItem('sas_token', d.token);
+  localStorage.setItem('sas_user', JSON.stringify(d.user));
+  location.href = d.user.role === 'siswa' ? 'siswa.html'
+    : d.user.role === 'guru' ? 'guru.html' : 'admin.html';
+};
+</script>
+</body>
+</html>
